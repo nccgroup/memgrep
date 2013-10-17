@@ -66,8 +66,12 @@ void printhex( unsigned char *buf, int size ) {
 	printf( "\n" );
 }
 
-
+#ifdef WIN64
 void PrintMemInfo(MEMORY_BASIC_INFORMATION64 memMeminfo)
+#endif
+#ifdef WIN32
+void PrintMemInfo(MEMORY_BASIC_INFORMATION memMeminfo)
+#endif
 {
 
 	switch (memMeminfo.AllocationProtect)
@@ -116,7 +120,12 @@ void PrintMemInfo(MEMORY_BASIC_INFORMATION64 memMeminfo)
 // Role		: Reads the process memory into our address space then we search it...
 // Notes	: 
 //
+#ifdef WIN64
 void ReadAndGrep(SIZE_T szSize, ULONG_PTR lngAddress, HANDLE hProcess, char *strString, MEMORY_BASIC_INFORMATION64 memMeminfo)
+#endif
+#ifdef WIN32
+void ReadAndGrep(SIZE_T szSize, ULONG_PTR lngAddress, HANDLE hProcess, char *strString, MEMORY_BASIC_INFORMATION memMeminfo)
+#endif
 {
 	SIZE_T szBytesRead=0;
 	unsigned char *strBuffer=(unsigned char *)VirtualAlloc(0,szSize+1024,MEM_COMMIT,PAGE_READWRITE);
@@ -230,19 +239,24 @@ void OpenAndGrep(bool bASCII, bool bUNICODE, char* strString, DWORD dwPID)
 
     for(;;)
     {
-        MEMORY_BASIC_INFORMATION64 memMeminfo;
+#ifdef WIN64
+		MEMORY_BASIC_INFORMATION64 memMeminfo;
+#endif
+#ifdef WIN32
+		MEMORY_BASIC_INFORMATION memMeminfo;
+#endif
         VirtualQueryEx(hProcess, reinterpret_cast<LPVOID>(addrCurrent), reinterpret_cast<PMEMORY_BASIC_INFORMATION>(&memMeminfo), sizeof(memMeminfo) );
 
-        if(lastBase == memMeminfo.BaseAddress) {
+        if(lastBase == (ULONG_PTR) memMeminfo.BaseAddress) {
             break;
         }
 
-        lastBase = memMeminfo.BaseAddress;
+        lastBase = (ULONG_PTR) memMeminfo.BaseAddress;
 
         if(memMeminfo.State == MEM_COMMIT) {
             //fprintf(stdout,"[i] %p\n", memMeminfo.BaseAddress);
 			//fprintf(stdout,"[i] %ld\n", memMeminfo.RegionSize);
-			ReadAndGrep(memMeminfo.RegionSize,memMeminfo.BaseAddress,hProcess,strString,memMeminfo);
+			ReadAndGrep(memMeminfo.RegionSize,(ULONG_PTR) memMeminfo.BaseAddress,hProcess,strString,memMeminfo);
         }
 
         addrCurrent += memMeminfo.RegionSize;
