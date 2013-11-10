@@ -147,7 +147,27 @@ void ReadAndGrep(SIZE_T szSize, ULONG_PTR lngAddress, HANDLE hProcess, char *str
 			if (memcmp(strString,strBufferNow,strlen(strString)) == 0){
 				fprintf(stdout,"[*] Got ASCII hit for %s at %p in %s (%d) page starts at %p ",strString,lngAddress+intCounter,strProc, dwPID,lngAddress);
 				PrintMemInfo(memMeminfo);
-				if(bDumpHex) printhex(strBufferNow,(int)strlen(strString));
+				
+				//if(bDumpHex) printhex(strBufferNow,(int)strlen(strString));
+				
+				if(bDumpHex) {
+					if((strBufferNow - strBuffer >= dwSlipBefore) && (strBuffer + (int)strlen(strString) + dwSlipAfter) <= strBufferEnd){
+						printhex(strBufferNow-dwSlipBefore,(int)strlen(strString)+dwSlipBefore+dwSlipAfter);
+					} 
+					else if(strBuffer-strBufferNow >= dwSlipBefore)
+					{
+						printhex(strBufferNow-dwSlipBefore,(int)strlen(strString)+dwSlipBefore);
+					} 
+					else if( (strlen(strString) + dwSlipAfter) <= (unsigned int)strBufferEnd)
+					{
+						printhex(strBufferNow,(int)strlen(strString)+dwSlipAfter);
+					} 
+					else 
+					{
+						printhex(strBufferNow,(int)strlen(strString));
+					}
+				}
+
 			} else {
 				
 				bool bMatch = true;
@@ -174,7 +194,7 @@ void ReadAndGrep(SIZE_T szSize, ULONG_PTR lngAddress, HANDLE hProcess, char *str
 						} 
 						else if(strBuffer-strBufferNow >= dwSlipBefore)
 						{
-							printhex(strBufferNow-dwSlipBefore,(int)(strlen(strString)*2));
+							printhex(strBufferNow-dwSlipBefore,(int)(strlen(strString)*2)+dwSlipBefore);
 						} 
 						else if( ((strlen(strString)*2) + dwSlipAfter) <= (unsigned int)strBufferEnd)
 						{
@@ -430,8 +450,8 @@ int _tmain(int argc, _TCHAR* argv[])
 		return -1;
 	}
 
-	if(dwSlipBefore > 0) fprintf(stdout,"[i] Will print %d bytes before hit\n",dwSlipBefore);
-	if(dwSlipAfter > 0) fprintf(stdout,"[i] Will print %d bytes after hit\n",dwSlipAfter);
+	if(dwSlipBefore > 0 && bDumpHex) fprintf(stdout,"[i] Will print %d bytes before hit\n",dwSlipBefore);
+	if(dwSlipAfter > 0 && bDumpHex) fprintf(stdout,"[i] Will print %d bytes after hit\n",dwSlipAfter);
 
 	SetDebugPrivilege(GetCurrentProcess());
 
