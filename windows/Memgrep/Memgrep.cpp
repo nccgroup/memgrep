@@ -146,12 +146,22 @@ void ReadAndGrep(SIZE_T szSize, ULONG_PTR lngAddress, HANDLE hProcess, char *str
 				PrintMemInfo(memMeminfo);
 				if(bDumpHex) printhex(strBufferNow,(int)strlen(strString));
 			} else {
+				
 				bool bMatch = true;
-				for(int intCount =0; intCount<strlen(strString) && strBufferEnd < strBufferEnd + strlen(strString) + 1;intCount+=2){
-					if(strBufferNow[intCount] != strString[intCount] || strBufferNow[intCount+1] != 0x00){
+				
+				int intCount2 = 0;
+
+				for(int intCount =0; intCount<strlen(strString)*2 && strBufferEnd < strBufferEnd + strlen(strString) + 1; intCount+=2){
+				
+					if(strBufferNow[intCount] != strString[intCount2] || strBufferNow[intCount+1] != 0x00){
 						bMatch = false;
+						break;
 					}
+
+					intCount2++;
+
 				}
+
 				if(bMatch) {
 					fprintf(stdout,"[*] Got unicode hit for %s at %p",strString,lngAddress+intCounter);
 					PrintMemInfo(memMeminfo);
@@ -189,11 +199,11 @@ void OpenAndGrep(bool bASCII, bool bUNICODE, char* strString, DWORD dwPID)
 		if(GetLastError()==5){
 			hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, dwPID);
 			if (hProcess == NULL){
-				fprintf(stderr,"[!] OpenProcess(%d),%d\n", dwPID, GetLastError());
+				fprintf(stderr,"[!] Failed to OpenProcess(%d),%d\n", dwPID, GetLastError());
 				return;
 			}
 		} else {
-			fprintf(stderr,"[!] OpenProcess(%d),%d\n", dwPID, GetLastError());
+			fprintf(stderr,"[!] Failed to OpenProcess(%d),%d\n", dwPID, GetLastError());
 			return;
 		}
 	}
@@ -227,7 +237,7 @@ void OpenAndGrep(bool bASCII, bool bUNICODE, char* strString, DWORD dwPID)
 		return;
 	}
 
-	fprintf(stdout,"[i] Searching %s\n",cProcess);
+	fprintf(stdout,"[i] Searching %s - %d\n",cProcess, dwPID);
 
 	//
 	// Walk the processes address space
@@ -353,9 +363,10 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	char	chOpt;
 	char	*strString = NULL;
+	DWORD	dwPID = 0;
 
 	// Extract all the options
-	while ((chOpt = getopt(argc, argv, _T("s:xh"))) != EOF) 
+	while ((chOpt = getopt(argc, argv, _T("s:p:xh"))) != EOF) 
 	switch(chOpt)
 	{
 		case _T('s'):
@@ -363,6 +374,9 @@ int _tmain(int argc, _TCHAR* argv[])
 			break;
 		case _T('x'):
 			bDumpHex = true;
+			break;
+		case _T('p'):
+			dwPID = atoi(optarg);
 			break;
 		default:
 			fwprintf(stderr,L"[!] No handler - %c\n", chOpt);
@@ -375,7 +389,12 @@ int _tmain(int argc, _TCHAR* argv[])
 	}
 
 	SetDebugPrivilege(GetCurrentProcess());
-	EnumerateProcesses(true,true,strString);
+	
+	if(dwPID != 0 ){
+		OpenAndGrep(true,true,strString,dwPID);
+	} else {
+		EnumerateProcesses(true,true,strString);
+	}
 	return 0;
 }
 
