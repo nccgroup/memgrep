@@ -16,6 +16,7 @@ Released under AGPL see LICENSE for more information
 // Globals
 HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 bool bDumpHex = false;
+bool bSuppress = false;
 
 //
 //
@@ -124,7 +125,7 @@ void PrintMemInfo(MEMORY_BASIC_INFORMATION memMeminfo)
 void ReadAndGrep(SIZE_T szSize, ULONG_PTR lngAddress, HANDLE hProcess, char *strString, MEMORY_BASIC_INFORMATION64 memMeminfo)
 #endif
 #ifdef WIN32
-void ReadAndGrep(SIZE_T szSize, ULONG_PTR lngAddress, HANDLE hProcess, char *strString, MEMORY_BASIC_INFORMATION memMeminfo)
+void ReadAndGrep(SIZE_T szSize, ULONG_PTR lngAddress, HANDLE hProcess, char *strString, MEMORY_BASIC_INFORMATION memMeminfo, char *strProc, DWORD dwPID)
 #endif
 {
 	SIZE_T szBytesRead=0;
@@ -142,7 +143,7 @@ void ReadAndGrep(SIZE_T szSize, ULONG_PTR lngAddress, HANDLE hProcess, char *str
 			
 			//fprintf(stdout,"[i] Searching %p which is %ld big and ends at %p\n",strBufferNow,szSize+1024,strBufferEnd);
 			if (memcmp(strString,strBufferNow,strlen(strString)) == 0){
-				fprintf(stdout,"[*] Got hit for %s at %p",strString,lngAddress+intCounter);
+				fprintf(stdout,"[*] Got hit for %s at %p in %s (%d)",strString,lngAddress+intCounter,strProc, dwPID);
 				PrintMemInfo(memMeminfo);
 				if(bDumpHex) printhex(strBufferNow,(int)strlen(strString));
 			} else {
@@ -199,11 +200,11 @@ void OpenAndGrep(bool bASCII, bool bUNICODE, char* strString, DWORD dwPID)
 		if(GetLastError()==5){
 			hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, dwPID);
 			if (hProcess == NULL){
-				fprintf(stderr,"[!] Failed to OpenProcess(%d),%d\n", dwPID, GetLastError());
+				if(!bSuppress) fprintf(stderr,"[!] Failed to OpenProcess(%d),%d\n", dwPID, GetLastError());
 				return;
 			}
 		} else {
-			fprintf(stderr,"[!] Failed to OpenProcess(%d),%d\n", dwPID, GetLastError());
+			if(!bSuppress) fprintf(stderr,"[!] Failed to OpenProcess(%d),%d\n", dwPID, GetLastError());
 			return;
 		}
 	}
@@ -211,9 +212,9 @@ void OpenAndGrep(bool bASCII, bool bUNICODE, char* strString, DWORD dwPID)
 	if (EnumProcessModules(hProcess,hModule,4096*sizeof(HMODULE), &dwRet) == 0)
 	{
 		if(GetLastError() == 299){
-			fprintf(stderr,"[i] 64bit process and we're 32bit - sad panda! skipping PID %d\n",dwPID);
+			if(!bSuppress) fprintf(stderr,"[i] 64bit process and we're 32bit - sad panda! skipping PID %d\n",dwPID);
 		} else {
-			fprintf(stderr,"[!] OpenAndGrep(%d),%d\n", dwPID, GetLastError());
+			if(!bSuppress) fprintf(stderr,"[!] OpenAndGrep(%d),%d\n", dwPID, GetLastError());
 		}
 		return;
 	}
@@ -237,7 +238,7 @@ void OpenAndGrep(bool bASCII, bool bUNICODE, char* strString, DWORD dwPID)
 		return;
 	}
 
-	fprintf(stdout,"[i] Searching %s - %d\n",cProcess, dwPID);
+	if(!bSuppress) fprintf(stdout,"[i] Searching %s - %d\n",cProcess, dwPID);
 
 	//
 	// Walk the processes address space
@@ -266,7 +267,7 @@ void OpenAndGrep(bool bASCII, bool bUNICODE, char* strString, DWORD dwPID)
         if(memMeminfo.State == MEM_COMMIT) {
             //fprintf(stdout,"[i] %p\n", memMeminfo.BaseAddress);
 			//fprintf(stdout,"[i] %ld\n", memMeminfo.RegionSize);
-			ReadAndGrep(memMeminfo.RegionSize,(ULONG_PTR) memMeminfo.BaseAddress,hProcess,strString,memMeminfo);
+			ReadAndGrep(memMeminfo.RegionSize,(ULONG_PTR) memMeminfo.BaseAddress,hProcess,strString,memMeminfo,cProcess,dwPID);
         }
 
         addrCurrent += memMeminfo.RegionSize;
@@ -348,7 +349,9 @@ void PrintHelp(char *strExe){
 
 	fprintf (stdout,"    i.e. %s -s <string>\n",strExe);
 	fprintf (stdout,"    -s <string> to search for\n");
+	fprintf (stdout,"    -f <file> file to read a list of strings from to search for\n");
 	fprintf (stdout,"    -p <PID> search this specific PID\n");
+	fprintf (stdout,"    -q quiet - suppress all but essential output\n");
 	fprintf (stdout,"    -x dump hex\n");
 	fprintf (stdout,"\n");
 	ExitProcess(1);
@@ -364,10 +367,13 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	char	chOpt;
 	char	*strString = NULL;
+	char	*strFile = NULL;
+	char	strLine[1024] = { 0 };
 	DWORD	dwPID = 0;
+	FILE	*fileStrings = NULL;
 
 	// Extract all the options
-	while ((chOpt = getopt(argc, argv, _T("s:p:xh"))) != EOF) 
+	while ((chOpt = getopt(argc, argv, _T("s:p:f:xhq"))) != EOF) 
 	switch(chOpt)
 	{
 		case _T('s'):
@@ -379,23 +385,60 @@ int _tmain(int argc, _TCHAR* argv[])
 		case _T('p'):
 			dwPID = atoi(optarg);
 			break;
+		case _T('q'):
+			bSuppress = true;
+			break;
+		case _T('f'):
+			strFile = optarg;
+			break;
 		default:
-			fwprintf(stderr,L"[!] No handler - %c\n", chOpt);
+			if(!bSuppress) fwprintf(stderr,L"[!] No handler - %c\n", chOpt);
 			break;
 	}
 
-	if(strString == NULL){
+	if(strString == NULL && strFile == NULL){
 		PrintHelp(argv[0]);
 		return -1;
 	}
 
 	SetDebugPrivilege(GetCurrentProcess());
-	
-	if(dwPID != 0 ){
-		OpenAndGrep(true,true,strString,dwPID);
-	} else {
-		EnumerateProcesses(true,true,strString);
+
+	if(strFile != NULL)
+	{
+		fprintf(stdout,"[i] Using file %s\n",strFile);
+		fileStrings = _tfopen(strFile,"r");
+		while ( fgets ( strLine, sizeof strLine, fileStrings ) != NULL ) 
+		{
+			while ((strLine[strlen(strLine)-1] == '\n') ||  (strLine[strlen(strLine)-1] == '\r'))  {
+				fprintf(stdout,"[i] trailing new line\n");
+				strLine[strlen(strLine)-1] = '\0';
+			}
+
+			fprintf(stdout,"[i] Using the string %s from %s\n",strLine,strFile);
+			if(dwPID != 0 ){
+				OpenAndGrep(true,true,strLine,dwPID);
+			} else {
+				EnumerateProcesses(true,true,strLine);
+			}
+		}
+		fclose ( fileStrings );
+	} 
+	else if (strString != NULL)
+	{
+		fprintf(stdout,"[i] Using the string '%s'\n",strString);
+		if(dwPID != 0 ){
+			OpenAndGrep(true,true,strString,dwPID);
+		} else {
+			EnumerateProcesses(true,true,strString);
+		}
+	} 
+	else 
+	{
+		if(!bSuppress) fprintf(stderr,"[!] Unknown error!\n");
+		return -1;
 	}
+	
+	
 	return 0;
 }
 
