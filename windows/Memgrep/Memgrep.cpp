@@ -164,7 +164,7 @@ void ReadAndGrep(SIZE_T szSize, ULONG_PTR lngAddress, HANDLE hProcess, char *str
 				}
 
 				if(bMatch) {
-					fprintf(stdout,"[*] Got unicode hit for %s at %p",strString,lngAddress+intCounter);
+					fprintf(stdout,"[*] Got unicode hit for %s at %p in %s (%d)",strString,lngAddress+intCounter,strProc, dwPID);
 					PrintMemInfo(memMeminfo);
 					if(bDumpHex) printhex(strBufferNow,(int)(strlen(strString)*2)+2);
 				}
