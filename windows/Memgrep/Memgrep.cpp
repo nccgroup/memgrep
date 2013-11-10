@@ -17,6 +17,8 @@ Released under AGPL see LICENSE for more information
 HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 bool bDumpHex = false;
 bool bSuppress = false;
+DWORD dwSlipBefore = 0;
+DWORD dwSlipAfter = 0;
 
 //
 //
@@ -122,7 +124,7 @@ void PrintMemInfo(MEMORY_BASIC_INFORMATION memMeminfo)
 // Notes	: 
 //
 #ifdef WIN64
-void ReadAndGrep(SIZE_T szSize, ULONG_PTR lngAddress, HANDLE hProcess, char *strString, MEMORY_BASIC_INFORMATION64 memMeminfo)
+void ReadAndGrep(SIZE_T szSize, ULONG_PTR lngAddress, HANDLE hProcess, char *strString, MEMORY_BASIC_INFORMATION64 memMeminfo, char *strProc, DWORD dwPID)
 #endif
 #ifdef WIN32
 void ReadAndGrep(SIZE_T szSize, ULONG_PTR lngAddress, HANDLE hProcess, char *strString, MEMORY_BASIC_INFORMATION memMeminfo, char *strProc, DWORD dwPID)
@@ -143,7 +145,7 @@ void ReadAndGrep(SIZE_T szSize, ULONG_PTR lngAddress, HANDLE hProcess, char *str
 			
 			//fprintf(stdout,"[i] Searching %p which is %ld big and ends at %p\n",strBufferNow,szSize+1024,strBufferEnd);
 			if (memcmp(strString,strBufferNow,strlen(strString)) == 0){
-				fprintf(stdout,"[*] Got hit for %s at %p in %s (%d)",strString,lngAddress+intCounter,strProc, dwPID);
+				fprintf(stdout,"[*] Got ASCII hit for %s at %p in %s (%d) page starts at %p ",strString,lngAddress+intCounter,strProc, dwPID,lngAddress);
 				PrintMemInfo(memMeminfo);
 				if(bDumpHex) printhex(strBufferNow,(int)strlen(strString));
 			} else {
@@ -164,9 +166,25 @@ void ReadAndGrep(SIZE_T szSize, ULONG_PTR lngAddress, HANDLE hProcess, char *str
 				}
 
 				if(bMatch) {
-					fprintf(stdout,"[*] Got unicode hit for %s at %p in %s (%d)",strString,lngAddress+intCounter,strProc, dwPID);
+					fprintf(stdout,"[*] Got unicode hit for %s at %p in %s (%d) page starts at %p ",strString,lngAddress+intCounter,strProc, dwPID,lngAddress);
 					PrintMemInfo(memMeminfo);
-					if(bDumpHex) printhex(strBufferNow,(int)(strlen(strString)*2)+2);
+					if(bDumpHex) {
+						if((strBufferNow - strBuffer >= dwSlipBefore) && (strBuffer + (int)(strlen(strString)*2) + dwSlipAfter) <= strBufferEnd){
+							printhex(strBufferNow-dwSlipBefore,(int)(strlen(strString)*2)+dwSlipBefore+dwSlipAfter);
+						} 
+						else if(strBuffer-strBufferNow >= dwSlipBefore)
+						{
+							printhex(strBufferNow-dwSlipBefore,(int)(strlen(strString)*2));
+						} 
+						else if( ((strlen(strString)*2) + dwSlipAfter) <= (unsigned int)strBufferEnd)
+						{
+							printhex(strBufferNow,(int)(strlen(strString)*2)+dwSlipAfter);
+						} 
+						else 
+						{
+							printhex(strBufferNow,(int)(strlen(strString)*2));
+						}
+					}
 				}
 			}
 			
@@ -353,6 +371,8 @@ void PrintHelp(char *strExe){
 	fprintf (stdout,"    -p <PID> search this specific PID\n");
 	fprintf (stdout,"    -q quiet - suppress all but essential output\n");
 	fprintf (stdout,"    -x dump hex\n");
+	fprintf (stdout,"    -b <number> - print this many bytes before buffer in a hex dump\n");
+	fprintf (stdout,"    -a <number> - print this many bytes after buffer in a hex dump\n");
 	fprintf (stdout,"\n");
 	ExitProcess(1);
 }
@@ -372,8 +392,11 @@ int _tmain(int argc, _TCHAR* argv[])
 	DWORD	dwPID = 0;
 	FILE	*fileStrings = NULL;
 
+	fprintf (stdout,"memgrep - https://www.nccgroup.com/\n");
+	fprintf (stdout,"        - https://github.com/nccgroup/memgrep\n");
+
 	// Extract all the options
-	while ((chOpt = getopt(argc, argv, _T("s:p:f:xhq"))) != EOF) 
+	while ((chOpt = getopt(argc, argv, _T("s:p:f:a:b:xhq"))) != EOF) 
 	switch(chOpt)
 	{
 		case _T('s'):
@@ -391,6 +414,12 @@ int _tmain(int argc, _TCHAR* argv[])
 		case _T('f'):
 			strFile = optarg;
 			break;
+		case _T('a'):
+			dwSlipAfter = atoi(optarg);
+			break;
+		case _T('b'):
+			dwSlipBefore = atoi(optarg);
+			break;
 		default:
 			if(!bSuppress) fwprintf(stderr,L"[!] No handler - %c\n", chOpt);
 			break;
@@ -400,6 +429,9 @@ int _tmain(int argc, _TCHAR* argv[])
 		PrintHelp(argv[0]);
 		return -1;
 	}
+
+	if(dwSlipBefore > 0) fprintf(stdout,"[i] Will print %d bytes before hit\n",dwSlipBefore);
+	if(dwSlipAfter > 0) fprintf(stdout,"[i] Will print %d bytes after hit\n",dwSlipAfter);
 
 	SetDebugPrivilege(GetCurrentProcess());
 
