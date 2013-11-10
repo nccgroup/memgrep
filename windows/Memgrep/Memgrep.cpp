@@ -348,6 +348,7 @@ void PrintHelp(char *strExe){
 
 	fprintf (stdout,"    i.e. %s -s <string>\n",strExe);
 	fprintf (stdout,"    -s <string> to search for\n");
+	fprintf (stdout,"    -p <PID> search this specific PID\n");
 	fprintf (stdout,"    -x dump hex\n");
 	fprintf (stdout,"\n");
 	ExitProcess(1);
