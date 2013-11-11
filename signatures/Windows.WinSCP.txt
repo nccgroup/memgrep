@@ -1,0 +1,4 @@
+
+Signature before password 4b 75 94 90 a3 01 00 00  00 00 
+Password then follows in UNICODE format..
+
