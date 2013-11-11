@@ -9,14 +9,22 @@ dumping post compromise.
 - Start the application / supply password
 - Run command similar to :
 
-  Memgrep.exe -a 10 -b 10 -f input.txt -x -p [PID of Process]
-
+  Memgrep.exe -a 10 -b 10 -f input.txt -x -p [PID of Process] -q
+ 
+  OR for an entire system scan
+  
+  Memgrep.exe -a 10 -b 10 -f input.txt -x -p -q
+  
 - Close the application
 - Start the application / supply password
 
 - Re-run command similar to :
 
-  Memgrep.exe -a 10 -b 10 -f input.txt -x -p [PID of Process]
+  Memgrep.exe -a 10 -b 10 -f input.txt -x -p [PID of Process] -q
+ 
+  OR for an entire system scan
+  
+  Memgrep.exe -a 10 -b 10 -f input.txt -x -p -q
 
 If common bytes are before / after could be a good signature...
 
