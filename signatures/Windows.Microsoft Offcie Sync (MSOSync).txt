@@ -1,0 +1,3 @@
+
+Signature before password [domain] 00 00
+Password then follows in UNICODE format..

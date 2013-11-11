@@ -1,0 +1,3 @@
+
+Signature before password [username] 00 00
+Password then follows in UNICODE format..
